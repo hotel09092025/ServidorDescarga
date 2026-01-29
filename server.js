@@ -8,20 +8,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Directorio de descargas dinámico (compatible con Windows y Linux)
+// Directorio de descargas dinámico
 const descargasDir = path.join(__dirname, 'musica_app');
 
-// Crear la carpeta automáticamente al iniciar
 if (!fs.existsSync(descargasDir)) {
     fs.mkdirSync(descargasDir, { recursive: true });
     console.log(`📁 Carpeta de descargas lista en: ${descargasDir}`);
 }
 
-// Función base para ejecutar yt-dlp
+// Función base corregida para Railway usando el binario directo
 function runYtDlp(args) {
     return new Promise((resolve, reject) => {
-        // Usamos python3 para Railway (en Windows también suele funcionar)
-        const command = `python3 -m yt_dlp ${args} --js-runtime node --no-playlist`;
+        // CAMBIO CLAVE: Usamos 'yt-dlp' directamente sin llamar a python3 -m
+        const command = `yt-dlp ${args} --js-runtime node --no-playlist`;
         
         console.log(`▶ Ejecutando: ${command}`);
         
@@ -36,22 +35,28 @@ function runYtDlp(args) {
     });
 }
 
-// 1. ENDPOINT DE INICIO: Comienza la descarga en el servidor
+// Función para limpiar nombres (maneja eñes, acentos y quita caracteres prohibidos)
+function limpiarNombreArchivo(texto) {
+    return texto
+        .normalize("NFD") // Descompone caracteres (ej: 'ñ' -> 'n' + '~')
+        .replace(/[\u0300-\u036f]/g, "") // Quita los acentos/tildes
+        .replace(/[<>:"/\\|?*]/g, '') // Quita caracteres prohibidos en archivos
+        .replace(/\s+/g, '_') // Cambia espacios por guiones bajos
+        .substring(0, 60); // Limita la longitud
+}
+
+// 1. ENDPOINT DE INICIO
 app.get('/descargar-cancion/:videoId', async (req, res) => {
     const videoId = req.params.videoId;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
     try {
         const title = await runYtDlp(`--get-title ${videoUrl}`);
-        const safeName = title
-            .replace(/[<>:"/\\|?*]/g, '')
-            .replace(/\s+/g, '_')
-            .substring(0, 50);
-        
+        // Limpiamos el nombre de forma segura para el sistema de archivos
+        const safeName = limpiarNombreArchivo(title);
         const nombreArchivo = `${safeName}.mp4`;
         const outputFile = path.join(descargasDir, nombreArchivo);
         
-        // Respuesta rápida al frontend de React Native
         res.json({
             success: true,
             titulo: title,
@@ -59,8 +64,8 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
             urlDescarga: `https://${req.get('host')}/obtener-archivo/${encodeURIComponent(nombreArchivo)}`
         });
         
-        // Comando de descarga optimizado para evitar Bloqueos (403)
-        const comandoDescarga = `python3 -m yt_dlp --js-runtime node --extractor-args "youtube:player-client=android,web" -f "ba[ext=m4a]/best[height<=360]" -o "${outputFile}" ${videoUrl}`;
+        // CAMBIO CLAVE: Comando de descarga usando 'yt-dlp' directamente
+        const comandoDescarga = `yt-dlp --js-runtime node --extractor-args "youtube:player-client=android,web" -f "ba[ext=m4a]/best[height<=360]" -o "${outputFile}" ${videoUrl}`;
         
         console.log(`⬇ Iniciando descarga de: ${title}`);
         
@@ -68,10 +73,8 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
             if (error) {
                 console.error(`❌ Falló la descarga de ${title}:`, error.message);
             } else {
-                console.log(`✅ Archivo listo en servidor: ${nombreArchivo}`);
+                console.log(`✅ Archivo listo: ${nombreArchivo}`);
 
-                // --- SISTEMA DE AUTOLIMPIEZA ---
-                // Borra el archivo después de 15 minutos para que el disco no se llene
                 setTimeout(() => {
                     if (fs.existsSync(outputFile)) {
                         fs.unlink(outputFile, (err) => {
@@ -79,7 +82,7 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
                             else console.log(`🗑️ Archivo temporal eliminado: ${nombreArchivo}`);
                         });
                     }
-                }, 900000); // 15 minutos (900,000 ms)
+                }, 900000); // 15 min
             }
         });
         
@@ -89,14 +92,14 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
     }
 });
 
-// 2. ENDPOINT DE VERIFICACIÓN: Tu App llama aquí cada 3 segundos (Polling)
+// 2. ENDPOINT DE VERIFICACIÓN
 app.get('/verificar-archivo/:videoId', async (req, res) => {
     const videoId = req.params.videoId;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
     try {
         const title = await runYtDlp(`--get-title ${videoUrl}`);
-        const safeName = title.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_').substring(0, 50);
+        const safeName = limpiarNombreArchivo(title);
         const nombreArchivo = `${safeName}.mp4`;
         const archivoPath = path.join(descargasDir, nombreArchivo);
 
@@ -104,7 +107,7 @@ app.get('/verificar-archivo/:videoId', async (req, res) => {
         
         res.json({
             success: true,
-            existe: existe, // Si esto es true, la App de React Native descarga el archivo
+            existe: existe,
             titulo: title,
             urlDescarga: existe ? `https://${req.get('host')}/obtener-archivo/${encodeURIComponent(nombreArchivo)}` : null
         });
@@ -113,23 +116,21 @@ app.get('/verificar-archivo/:videoId', async (req, res) => {
     }
 });
 
-// 3. ENDPOINT DE ENTREGA: Envía el archivo al celular
+// 3. ENDPOINT DE ENTREGA
 app.get('/obtener-archivo/:nombre', (req, res) => {
     const nombre = decodeURIComponent(req.params.nombre);
     const archivoPath = path.join(descargasDir, nombre);
     
     if (fs.existsSync(archivoPath)) {
-        console.log(`📤 Enviando archivo a dispositivo: ${nombre}`);
+        console.log(`📤 Enviando archivo: ${nombre}`);
         res.download(archivoPath);
     } else {
-        res.status(404).json({ error: 'El archivo ya no está disponible o se está procesando.' });
+        res.status(404).json({ error: 'Archivo no encontrado' });
     }
 });
 
-// PUERTO PARA RAILWAY
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 SERVIDOR ONLINE`);
+    console.log(`\n🚀 SERVIDOR ONLINE CORREGIDO`);
     console.log(`📍 Puerto: ${PORT}`);
-    console.log(`🗑️ Autolimpieza configurada: 15 minutos`);
 });
