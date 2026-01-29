@@ -2,7 +2,11 @@
 aptPkgs = ["ffmpeg", "python3", "python3-pip"]
 
 [phases.build]
-cmds = ["npm install", "pip install yt-dlp --break-system-packages"]
-
+cmds = [
+    "npm install",
+    "python3 -m pip install --upgrade pip",
+    "python3 -m pip install --upgrade yt-dlp --break-system-packages", # Añadimos --upgrade
+    "ln -s $(python3 -m pip show yt-dlp | grep Location | cut -d ' ' -f 2)/yt_dlp/__main__.py /usr/local/bin/yt-dlp || true"
+]
 [phases.start]
 cmd = "node server.js"
