@@ -27,8 +27,15 @@ app.get('/descargar/:videoId', async (req, res) => {
         console.log(`⬇ Descargando temporalmente: ${titulo}`);
 
         // 2. Descargar al disco de Railway (con tus cookies y formato MP4)
-        const comando = `${YT_DLP_PATH} -f "bestaudio[ext=m4a]/best[height<=360]" --cookies "./cookies.txt" -o "${filePath}" ${videoUrl}`;
-        
+        // MODIFICACIÓN EN EL COMANDO DE DESCARGA
+const comando = `${YT_DLP_PATH} ` + 
+    `--no-check-certificate ` +
+    `--js-runtime node ` +
+    `--extractor-args "youtube:player_client=android,web;player_skip=web_safari,configs" ` +
+    `--user-agent "Mozilla/5.0 (Android 14; Mobile; rv:121.0) Gecko/121.0 Firefox/121.0" ` +
+    `-f "bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best" ` +
+    `-o "${filePath}" ` +
+    `${videoUrl}`;
         exec(comando, (error) => {
             if (error) {
                 console.error("❌ Error YT:", error);
@@ -50,3 +57,4 @@ app.get('/descargar/:videoId', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Servidor de Transferencia Directa OK`));
+
