@@ -8,7 +8,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Directorio de descargas dinámico
+// --- CONFIGURACIÓN DE RUTAS ---
+// Definimos la ruta de yt-dlp una sola vez para evitar errores de "not found"
+const YT_DLP_PATH = '/usr/local/bin/yt-dlp';
 const descargasDir = path.join(__dirname, 'musica_app');
 
 if (!fs.existsSync(descargasDir)) {
@@ -16,28 +18,32 @@ if (!fs.existsSync(descargasDir)) {
     console.log(`📁 Carpeta de descargas lista en: ${descargasDir}`);
 }
 
-// Función base corregida para Railway usando el binario directo
+/**
+ * Función para limpiar nombres de archivos.
+ * Maneja tildes, eñes y quita caracteres especiales para que Linux no falle.
+ */
+function limpiarNombreArchivo(texto) {
+    return texto
+        .normalize("NFD")               // Descompone acentos y eñes
+        .replace(/[\u0300-\u036f]/g, "") // Elimina los acentos
+        .replace(/[<>:"/\\|?*]/g, '')    // Quita caracteres prohibidos en sistemas de archivos
+        .replace(/\s+/g, '_')            // Cambia espacios por guiones bajos
+        .substring(0, 60);               // Limita longitud para evitar errores de ruta
+}
+
+/**
+ * Función base para ejecutar comandos de yt-dlp
+ */
 function runYtDlp(args) {
     return new Promise((resolve, reject) => {
-        // Probamos con la ruta donde pip instala los ejecutables en Railway
-        // Si no está ahí, el sistema intentará usar el comando global
-        const ytDlpPath = '/usr/local/bin/yt-dlp'; 
-        const command = `${ytDlpPath} ${args} --js-runtime node --no-playlist`;
+        const command = `${YT_DLP_PATH} ${args} --js-runtime node --no-playlist`;
         
         console.log(`▶ Ejecutando: ${command}`);
         
         exec(command, { timeout: 180000 }, (error, stdout, stderr) => {
             if (error) {
-                // Si falla la ruta absoluta, intentamos con el comando simple por si acaso
-                console.log("Reintentando con comando simple...");
-                exec(`yt-dlp ${args} --js-runtime node --no-playlist`, (error2, stdout2, stderr2) => {
-                    if (error2) {
-                        console.error('❌ Error final en yt-dlp:', stderr2 || error2.message);
-                        reject(new Error(error2.message));
-                    } else {
-                        resolve(stdout2.trim());
-                    }
-                });
+                console.error('❌ Error en yt-dlp:', stderr || error.message);
+                reject(new Error(error.message));
             } else {
                 resolve(stdout.trim());
             }
@@ -45,28 +51,19 @@ function runYtDlp(args) {
     });
 }
 
-// Función para limpiar nombres (maneja eñes, acentos y quita caracteres prohibidos)
-function limpiarNombreArchivo(texto) {
-    return texto
-        .normalize("NFD") // Descompone caracteres (ej: 'ñ' -> 'n' + '~')
-        .replace(/[\u0300-\u036f]/g, "") // Quita los acentos/tildes
-        .replace(/[<>:"/\\|?*]/g, '') // Quita caracteres prohibidos en archivos
-        .replace(/\s+/g, '_') // Cambia espacios por guiones bajos
-        .substring(0, 60); // Limita la longitud
-}
-
-// 1. ENDPOINT DE INICIO
+// 1. ENDPOINT DE INICIO: Inicia el proceso de descarga
 app.get('/descargar-cancion/:videoId', async (req, res) => {
     const videoId = req.params.videoId;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
     try {
+        // Obtenemos el título real del video
         const title = await runYtDlp(`--get-title ${videoUrl}`);
-        // Limpiamos el nombre de forma segura para el sistema de archivos
         const safeName = limpiarNombreArchivo(title);
         const nombreArchivo = `${safeName}.mp4`;
         const outputFile = path.join(descargasDir, nombreArchivo);
         
+        // Respondemos de inmediato al celular con el nombre que tendrá el archivo
         res.json({
             success: true,
             titulo: title,
@@ -74,8 +71,8 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
             urlDescarga: `https://${req.get('host')}/obtener-archivo/${encodeURIComponent(nombreArchivo)}`
         });
         
-        // CAMBIO CLAVE: Comando de descarga usando 'yt-dlp' directamente
-        const comandoDescarga = `yt-dlp --js-runtime node --extractor-args "youtube:player-client=android,web" -f "ba[ext=m4a]/best[height<=360]" -o "${outputFile}" ${videoUrl}`;
+        // COMANDO DE DESCARGA: Ahora usa la ruta completa YT_DLP_PATH
+        const comandoDescarga = `${YT_DLP_PATH} --js-runtime node --extractor-args "youtube:player-client=android,web" -f "ba[ext=m4a]/best[height<=360]" -o "${outputFile}" ${videoUrl}`;
         
         console.log(`⬇ Iniciando descarga de: ${title}`);
         
@@ -83,8 +80,9 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
             if (error) {
                 console.error(`❌ Falló la descarga de ${title}:`, error.message);
             } else {
-                console.log(`✅ Archivo listo: ${nombreArchivo}`);
+                console.log(`✅ Archivo listo en servidor: ${nombreArchivo}`);
 
+                // Autolimpieza: Borra el archivo en 15 minutos
                 setTimeout(() => {
                     if (fs.existsSync(outputFile)) {
                         fs.unlink(outputFile, (err) => {
@@ -92,7 +90,7 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
                             else console.log(`🗑️ Archivo temporal eliminado: ${nombreArchivo}`);
                         });
                     }
-                }, 900000); // 15 min
+                }, 900000); 
             }
         });
         
@@ -102,7 +100,7 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
     }
 });
 
-// 2. ENDPOINT DE VERIFICACIÓN
+// 2. ENDPOINT DE VERIFICACIÓN: El celular pregunta si el archivo ya bajó
 app.get('/verificar-archivo/:videoId', async (req, res) => {
     const videoId = req.params.videoId;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -126,16 +124,16 @@ app.get('/verificar-archivo/:videoId', async (req, res) => {
     }
 });
 
-// 3. ENDPOINT DE ENTREGA
+// 3. ENDPOINT DE ENTREGA: Descarga real del archivo al celular
 app.get('/obtener-archivo/:nombre', (req, res) => {
     const nombre = decodeURIComponent(req.params.nombre);
     const archivoPath = path.join(descargasDir, nombre);
     
     if (fs.existsSync(archivoPath)) {
-        console.log(`📤 Enviando archivo: ${nombre}`);
+        console.log(`📤 Enviando archivo a dispositivo: ${nombre}`);
         res.download(archivoPath);
     } else {
-        res.status(404).json({ error: 'Archivo no encontrado' });
+        res.status(404).json({ error: 'El archivo ya no está disponible.' });
     }
 });
 
@@ -143,5 +141,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 SERVIDOR ONLINE CORREGIDO`);
     console.log(`📍 Puerto: ${PORT}`);
+    console.log(`📂 Ruta yt-dlp: ${YT_DLP_PATH}`);
 });
-
