@@ -1,52 +1,52 @@
 const express = require('express');
-const { spawn, exec } = require('child_process');
+const { exec } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
-// En Railway no usamos powershell, usamos la ruta directa de Linux
 const YT_DLP_PATH = '/usr/local/bin/yt-dlp'; 
+const descargasDir = path.join(__dirname, 'temp_music');
 
-app.get('/descargar/:videoId', (req, res) => {
+if (!fs.existsSync(descargasDir)) fs.mkdirSync(descargasDir);
+
+app.get('/descargar/:videoId', async (req, res) => {
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    
+    // 1. Obtener el título primero para el nombre del archivo
+    exec(`${YT_DLP_PATH} --get-title ${videoUrl}`, (err, stdout) => {
+        if (err) return res.status(500).json({ error: "Error obteniendo título" });
 
-    console.log(`🎬 Iniciando túnel MP4 para: ${videoId}`);
+        const titulo = stdout.trim();
+        const safeName = titulo.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_') + ".mp4";
+        const filePath = path.join(descargasDir, safeName);
 
-    // Cabeceras para que el celular lo reconozca como video/audio MP4
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
+        console.log(`⬇ Descargando temporalmente: ${titulo}`);
 
-    // USAMOS TU LÓGICA: Buscar el mejor audio o un video pequeño (MP4)
-    // Esto es mucho más compatible que el formato 140 solo.
-    const proceso = spawn(YT_DLP_PATH, [
-        '--cookies', './cookies.txt',
-        '--js-runtime', 'node',
-        // Tu lógica de formato: mejor audio m4a o video de 360p (MP4)
-        '-f', 'bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best',
-        '-o', '-', // Mandar a la salida estándar para el túnel
-        '--no-playlist',
-        '--no-check-certificate',
-        videoUrl
-    ]);
+        // 2. Descargar al disco de Railway (con tus cookies y formato MP4)
+        const comando = `${YT_DLP_PATH} -f "bestaudio[ext=m4a]/best[height<=360]" --cookies "./cookies.txt" -o "${filePath}" ${videoUrl}`;
+        
+        exec(comando, (error) => {
+            if (error) {
+                console.error("❌ Error YT:", error);
+                return res.status(500).send("Error en YouTube");
+            }
 
-    // El flujo de datos va directo al celular
-    proceso.stdout.pipe(res);
-
-    proceso.stderr.on('data', (data) => {
-        const line = data.toString();
-        if (line.includes('ERROR')) console.error(`❌ Error YT: ${line}`);
-    });
-
-    proceso.on('close', (code) => {
-        console.log(`🏁 Proceso finalizado con código: ${code}`);
+            // 3. ENVIAR AL CELULAR
+            console.log(`📤 Enviando al celular: ${safeName}`);
+            res.download(filePath, safeName, (err) => {
+                if (!err) {
+                    // 4. BORRAR DEL SERVIDOR (Auto-limpieza)
+                    fs.unlinkSync(filePath); 
+                    console.log(`🗑️ Limpieza: Archivo borrado del servidor.`);
+                }
+            });
+        });
     });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🎵 SERVIDOR MP4 HÍBRIDO ONLINE`);
-    console.log(`📍 Puerto: ${PORT}`);
-    console.log(`🎬 Usando formato compatible (MP4/M4A)`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Servidor de Transferencia Directa OK`));
