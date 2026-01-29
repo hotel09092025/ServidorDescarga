@@ -1,0 +1,4 @@
+node_modules/
+musica_app/
+cache/
+.env
