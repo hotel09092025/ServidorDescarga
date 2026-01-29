@@ -74,9 +74,10 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
         // COMANDO DE DESCARGA: Ahora usa la ruta completa YT_DLP_PATH
         // REEMPLAZA TU comandoDescarga POR ESTE:
 const comandoDescarga = `${YT_DLP_PATH} --js-runtime node --no-check-certificate ` +
-    `--extractor-args "youtube:player-client=mweb,tv" ` + 
+    `--extractor-args "youtube:player-client=web_embedded,tvweb" ` + 
     `-f "ba[ext=m4a]/bestaudio/best" ` +
-    `--force-ipv4 --geo-bypass ` +
+    `--add-header "Accept-Language:es-ES,es;q=0.9" ` +
+    `--no-warnings ` +
     `-o "${outputFile}" ${videoUrl}`;
         console.log(`⬇ Iniciando descarga de: ${title}`);
         
@@ -147,5 +148,6 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`📍 Puerto: ${PORT}`);
     console.log(`📂 Ruta yt-dlp: ${YT_DLP_PATH}`);
 });
+
 
 
