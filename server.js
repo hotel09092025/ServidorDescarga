@@ -6,8 +6,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// En Railway con Nixpacks, simplemente usa 'yt-dlp' si ya se instaló en el build
-const YT_DLP_PATH = 'yt-dlp'; 
+// Volvemos a la ruta que SI te funcionaba
+const YT_DLP_PATH = '/usr/local/bin/yt-dlp'; 
 
 function limpiarNombre(texto) {
     return texto
@@ -22,12 +22,8 @@ app.get('/obtener-link/:videoId', (req, res) => {
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    // COMANDO CORREGIDO Y UNIFICADO
-    const command = `${YT_DLP_PATH} --js-runtime node ` +
-        `--cookies "./cookies.txt" ` + 
-        `--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" ` +
-        `--no-check-certificate ` +
-        `-f "ba[ext=m4a]/bestaudio" --get-title --get-url "${videoUrl}"`;
+    // COMANDO UNIFICADO CON RUTA ABSOLUTA Y COOKIES
+    const command = `${YT_DLP_PATH} --js-runtime node --cookies "./cookies.txt" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" --no-check-certificate -f "ba[ext=m4a]/bestaudio" --get-title --get-url "${videoUrl}"`;
 
     console.log(`🔗 Generando link para: ${videoId}`);
 
@@ -42,7 +38,6 @@ app.get('/obtener-link/:videoId', (req, res) => {
 
         const lineas = stdout.trim().split('\n');
         
-        // Verificamos que tengamos al menos el título y la URL
         if (lineas.length < 2) {
             return res.status(500).json({ success: false, error: "Respuesta incompleta de YouTube" });
         }
@@ -63,6 +58,6 @@ app.get('/obtener-link/:videoId', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`\n🚀 SERVIDOR MODO LINK-DIRECTO ONLINE`);
+    console.log(`\n🚀 SERVIDOR ONLINE CON RUTA FIJA`);
     console.log(`📍 Puerto: ${PORT}`);
 });
