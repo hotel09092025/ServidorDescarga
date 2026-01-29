@@ -26,7 +26,12 @@ app.get('/obtener-link/:videoId', (req, res) => {
 
     // Comando para obtener Título y URL de audio (m4a)
 // En server.js de Railway
-const command = `${YT_DLP_PATH} --js-runtime node -f "ba[ext=m4a]/bestaudio" --extractor-args "youtube:player-client=tv;player-skip=web,mweb,android,ios" --get-title --get-url "${videoUrl}"`;
+// server.js en Railway
+const command = `${YT_DLP_PATH} --js-runtime node ` +
+    `--cookies "./cookies.txt" ` + 
+    `--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" ` +
+    `--no-check-certificate ` +
+    `-f "ba[ext=m4a]/bestaudio" --get-title --get-url "${videoUrl}"`;
     console.log(`🔗 Generando link para: ${videoId}`);
 
     exec(command, (error, stdout, stderr) => {
@@ -62,4 +67,5 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 SERVIDOR MODO LINK-DIRECTO ONLINE`);
     console.log(`📍 Puerto: ${PORT}`);
 });
+
 
