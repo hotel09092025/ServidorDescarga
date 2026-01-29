@@ -52,18 +52,18 @@ function runYtDlp(args) {
 }
 
 // 1. ENDPOINT DE INICIO: Inicia el proceso de descarga
+
 app.get('/descargar-cancion/:videoId', async (req, res) => {
     const videoId = req.params.videoId;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
     try {
-        // Obtenemos el título real del video
+        // Obtenemos el título
         const title = await runYtDlp(`--get-title ${videoUrl}`);
         const safeName = limpiarNombreArchivo(title);
         const nombreArchivo = `${safeName}.mp4`;
         const outputFile = path.join(descargasDir, nombreArchivo);
         
-        // Respondemos de inmediato al celular con el nombre que tendrá el archivo
         res.json({
             success: true,
             titulo: title,
@@ -71,40 +71,27 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
             urlDescarga: `https://${req.get('host')}/obtener-archivo/${encodeURIComponent(nombreArchivo)}`
         });
         
-        // COMANDO DE DESCARGA: Ahora usa la ruta completa YT_DLP_PATH
-        // REEMPLAZA TU comandoDescarga POR ESTE:
-const comandoDescarga = `${YT_DLP_PATH} --js-runtime node --no-check-certificate ` +
-    `--extractor-args "youtube:player-client=web_embedded,tvweb" ` + 
-    `-f "ba[ext=m4a]/bestaudio/best" ` +
-    `--add-header "Accept-Language:es-ES,es;q=0.9" ` +
-    `--no-warnings ` +
-    `-o "${outputFile}" ${videoUrl}`;
-        console.log(`⬇ Iniciando descarga de: ${title}`);
+        // COMANDO OPTIMIZADO: Cliente TV para saltar error 152
+        const comandoDescarga = `${YT_DLP_PATH} --js-runtime node --extractor-args "youtube:player-client=tv;player-skip=web,mweb,android,ios" -f "ba[ext=m4a]/bestaudio/best" --force-ipv4 -o "${outputFile}" ${videoUrl}`;
         
+        console.log(`⬇ Iniciando descarga: ${title}`);
+        
+        // Usamos { detached: false } para asegurar que el proceso no se quede colgado
         exec(comandoDescarga, (error) => {
             if (error) {
-                console.error(`❌ Falló la descarga de ${title}:`, error.message);
+                console.error(`❌ Falló la descarga:`, error.message);
             } else {
-                console.log(`✅ Archivo listo en servidor: ${nombreArchivo}`);
-
-                // Autolimpieza: Borra el archivo en 15 minutos
-                setTimeout(() => {
-                    if (fs.existsSync(outputFile)) {
-                        fs.unlink(outputFile, (err) => {
-                            if (err) console.error(`Error al limpiar: ${err}`);
-                            else console.log(`🗑️ Archivo temporal eliminado: ${nombreArchivo}`);
-                        });
-                    }
-                }, 900000); 
+                console.log(`✅ Archivo listo: ${nombreArchivo}`);
+                // Autolimpieza en 15 min
+                setTimeout(() => { if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile); }, 900000);
             }
         });
         
     } catch (error) {
-        console.error('❌ Error General:', error.message);
+        console.error('❌ Error:', error.message);
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
 // 2. ENDPOINT DE VERIFICACIÓN: El celular pregunta si el archivo ya bajó
 app.get('/verificar-archivo/:videoId', async (req, res) => {
     const videoId = req.params.videoId;
@@ -148,6 +135,7 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`📍 Puerto: ${PORT}`);
     console.log(`📂 Ruta yt-dlp: ${YT_DLP_PATH}`);
 });
+
 
 
 
