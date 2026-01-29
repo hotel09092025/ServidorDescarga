@@ -72,8 +72,7 @@ app.get('/descargar-cancion/:videoId', async (req, res) => {
         });
         
         // COMANDO DE DESCARGA: Ahora usa la ruta completa YT_DLP_PATH
-        const comandoDescarga = `${YT_DLP_PATH} --js-runtime node --extractor-args "youtube:player-client=android,web" -f "ba[ext=m4a]/best[height<=360]" -o "${outputFile}" ${videoUrl}`;
-        
+        const comandoDescarga = `${YT_DLP_PATH} --js-runtime node --extractor-args "youtube:player-client=ios,web,tv" -f "ba[ext=m4a]/bestaudio/best" --no-check-certificate --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" -o "${outputFile}" ${videoUrl}`;
         console.log(`⬇ Iniciando descarga de: ${title}`);
         
         exec(comandoDescarga, (error) => {
@@ -143,3 +142,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`📍 Puerto: ${PORT}`);
     console.log(`📂 Ruta yt-dlp: ${YT_DLP_PATH}`);
 });
+
