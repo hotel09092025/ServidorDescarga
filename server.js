@@ -23,8 +23,11 @@ app.get('/obtener-link/:videoId', (req, res) => {
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
     // COMANDO UNIFICADO CON RUTA ABSOLUTA Y COOKIES
-    const command = `${YT_DLP_PATH} --js-runtime node --cookies "./cookies.txt" --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" --no-check-certificate -f "ba[ext=m4a]/bestaudio" --get-title --get-url "${videoUrl}"`;
-
+const command = `${YT_DLP_PATH} --js-runtime node ` +
+    `--cookies "./cookies.txt" ` +
+    `--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" ` +
+    `-f "bestaudio[ext=m4a]/bestaudio/best" ` + // Buscamos m4a, si no, cualquier audio
+    `--no-check-certificate --get-title --get-url "${videoUrl}"`;
     console.log(`🔗 Generando link para: ${videoId}`);
 
     exec(command, (error, stdout, stderr) => {
@@ -61,3 +64,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 SERVIDOR ONLINE CON RUTA FIJA`);
     console.log(`📍 Puerto: ${PORT}`);
 });
+
