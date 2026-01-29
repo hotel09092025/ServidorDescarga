@@ -2,7 +2,7 @@
 aptPkgs = ["ffmpeg"]
 
 [phases.build]
-cmds = ["npm install", "pip install -r requirements.txt"]
+cmds = ["npm install"]
 
 [phases.start]
 cmd = "node server.js"
