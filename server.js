@@ -19,15 +19,25 @@ if (!fs.existsSync(descargasDir)) {
 // Función base corregida para Railway usando el binario directo
 function runYtDlp(args) {
     return new Promise((resolve, reject) => {
-        // CAMBIO CLAVE: Usamos 'yt-dlp' directamente sin llamar a python3 -m
-        const command = `yt-dlp ${args} --js-runtime node --no-playlist`;
+        // Probamos con la ruta donde pip instala los ejecutables en Railway
+        // Si no está ahí, el sistema intentará usar el comando global
+        const ytDlpPath = '/usr/local/bin/yt-dlp'; 
+        const command = `${ytDlpPath} ${args} --js-runtime node --no-playlist`;
         
         console.log(`▶ Ejecutando: ${command}`);
         
         exec(command, { timeout: 180000 }, (error, stdout, stderr) => {
             if (error) {
-                console.error('❌ Error en yt-dlp:', stderr || error.message);
-                reject(new Error(error.message));
+                // Si falla la ruta absoluta, intentamos con el comando simple por si acaso
+                console.log("Reintentando con comando simple...");
+                exec(`yt-dlp ${args} --js-runtime node --no-playlist`, (error2, stdout2, stderr2) => {
+                    if (error2) {
+                        console.error('❌ Error final en yt-dlp:', stderr2 || error2.message);
+                        reject(new Error(error2.message));
+                    } else {
+                        resolve(stdout2.trim());
+                    }
+                });
             } else {
                 resolve(stdout.trim());
             }
@@ -134,3 +144,4 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 SERVIDOR ONLINE CORREGIDO`);
     console.log(`📍 Puerto: ${PORT}`);
 });
+
