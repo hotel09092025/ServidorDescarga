@@ -6,10 +6,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Ruta del ejecutable en Railway
-const YT_DLP_PATH = '/usr/local/bin/yt-dlp';
+// En Railway con Nixpacks, simplemente usa 'yt-dlp' si ya se instaló en el build
+const YT_DLP_PATH = 'yt-dlp'; 
 
-// Función para limpiar nombres de archivos
 function limpiarNombre(texto) {
     return texto
         .normalize("NFD")
@@ -19,37 +18,37 @@ function limpiarNombre(texto) {
         .substring(0, 60);
 }
 
-// ENDPOINT ESTILO RYT-MUSIC (Link Directo)
 app.get('/obtener-link/:videoId', (req, res) => {
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    // Comando para obtener Título y URL de audio (m4a)
-// En server.js de Railway
-// server.js en Railway
-const command = `${YT_DLP_PATH} --js-runtime node ` +
-    `--cookies "./cookies.txt" ` + 
-    `--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" ` +
-    `--no-check-certificate ` +
-    `-f "ba[ext=m4a]/bestaudio" --get-title --get-url "${videoUrl}"`;
+    // COMANDO CORREGIDO Y UNIFICADO
+    const command = `${YT_DLP_PATH} --js-runtime node ` +
+        `--cookies "./cookies.txt" ` + 
+        `--user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36" ` +
+        `--no-check-certificate ` +
+        `-f "ba[ext=m4a]/bestaudio" --get-title --get-url "${videoUrl}"`;
+
     console.log(`🔗 Generando link para: ${videoId}`);
 
     exec(command, (error, stdout, stderr) => {
         if (error) {
-            console.error('❌ Error:', stderr || error.message);
+            console.error('❌ Error de yt-dlp:', stderr || error.message);
             return res.status(500).json({ 
                 success: false, 
-                error: "YouTube bloqueó la petición al servidor. Reintenta." 
+                error: "YouTube detectó un bot o las cookies expiraron." 
             });
         }
 
         const lineas = stdout.trim().split('\n');
+        
+        // Verificamos que tengamos al menos el título y la URL
+        if (lineas.length < 2) {
+            return res.status(500).json({ success: false, error: "Respuesta incompleta de YouTube" });
+        }
+
         const titulo = lineas[0];
         const urlDirecta = lineas[1];
-
-        if (!urlDirecta) {
-            return res.status(500).json({ success: false, error: "No se encontró el link de audio" });
-        }
 
         console.log(`✅ Link generado: ${titulo}`);
 
@@ -67,5 +66,3 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 SERVIDOR MODO LINK-DIRECTO ONLINE`);
     console.log(`📍 Puerto: ${PORT}`);
 });
-
-
