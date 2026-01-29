@@ -1,50 +1,52 @@
 const express = require('express');
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const cors = require('cors');
 
 const app = express();
 app.use(cors());
 
+// En Railway no usamos powershell, usamos la ruta directa de Linux
 const YT_DLP_PATH = '/usr/local/bin/yt-dlp'; 
 
 app.get('/descargar/:videoId', (req, res) => {
     const { videoId } = req.params;
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    console.log(`🚀 Iniciando descarga blindada: ${videoId}`);
+    console.log(`🎬 Iniciando túnel MP4 para: ${videoId}`);
 
-    res.setHeader('Content-Type', 'audio/mp4');
-    // Forzamos el nombre en la cabecera
-    res.setHeader('Content-Disposition', 'attachment; filename="musica.m4a"');
+    // Cabeceras para que el celular lo reconozca como video/audio MP4
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
 
+    // USAMOS TU LÓGICA: Buscar el mejor audio o un video pequeño (MP4)
+    // Esto es mucho más compatible que el formato 140 solo.
     const proceso = spawn(YT_DLP_PATH, [
-        // 1. Engañamos a YT diciendo que somos una App de iOS (pide menos cookies)
-        '--extractor-args', 'youtube:player_client=ios,android',
-        // 2. Usamos el motor de Node de Railway para resolver firmas
+        '--cookies', './cookies.txt',
         '--js-runtime', 'node',
-        // 3. Forzamos el formato de audio estándar de Apple (M4A)
-        '-f', '140',
-        '-o', '-',
+        // Tu lógica de formato: mejor audio m4a o video de 360p (MP4)
+        '-f', 'bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best',
+        '-o', '-', // Mandar a la salida estándar para el túnel
+        '--no-playlist',
         '--no-check-certificate',
-        '--quiet',
         videoUrl
     ]);
 
-    // Pasamos los datos directamente al móvil
+    // El flujo de datos va directo al celular
     proceso.stdout.pipe(res);
 
     proceso.stderr.on('data', (data) => {
-        const msg = data.toString();
-        // Solo logueamos errores reales, no advertencias
-        if (msg.includes('ERROR')) console.error(`[Error YT]: ${msg}`);
+        const line = data.toString();
+        if (line.includes('ERROR')) console.error(`❌ Error YT: ${line}`);
     });
 
     proceso.on('close', (code) => {
-        console.log(`🏁 Proceso terminado (Código ${code})`);
+        console.log(`🏁 Proceso finalizado con código: ${code}`);
     });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ SERVIDOR BLINDADO CORRIENDO`);
+    console.log(`\n🎵 SERVIDOR MP4 HÍBRIDO ONLINE`);
+    console.log(`📍 Puerto: ${PORT}`);
+    console.log(`🎬 Usando formato compatible (MP4/M4A)`);
 });
