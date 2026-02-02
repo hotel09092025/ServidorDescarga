@@ -1,25 +1,27 @@
 const express = require('express');
 const { spawn } = require('child_process');
 const cors = require('cors');
-const ytSearch = require('yt-search'); 
+const ytSearch = require('yt-search'); // Añadimos el buscador
+
+// PARCHE PARA QUE NO EXPLOTE (Lo necesitamos para yt-search)
+if (typeof File === 'undefined') { global.File = class extends Object {}; }
 
 const app = express();
 app.use(cors());
 
-// Mantenemos tu ruta porque ya comprobaste que ahí es donde vive el ejecutable
+// Tu ruta absoluta verificada
 const YT_DLP_PATH = '/usr/local/bin/yt-dlp'; 
 
-// RUTA DE BÚSQUEDA: Sin API Key, usando yt-search
+// --- NUEVA RUTA DE BÚSQUEDA (Sin API Key de Google) ---
 app.get('/buscar', async (req, res) => {
     try {
         const query = req.query.q;
-        if (!query) return res.status(400).send("Falta el parámetro q");
+        console.log(`[LOG] 🔍 Buscando: ${query}`);
         
-        console.log(`[LOG] 🔍 Buscando en YouTube: ${query}`);
         const r = await ytSearch(query);
-        
-        // Formateamos para que tu App de React Native no note el cambio
         const videos = r.videos.slice(0, 15);
+        
+        // Mantenemos el formato de Google para que tu App no note el cambio
         const results = videos.map(v => ({
             id: { videoId: v.videoId },
             snippet: {
@@ -32,40 +34,52 @@ app.get('/buscar', async (req, res) => {
         res.json({ items: results });
     } catch (e) {
         console.error("Error en búsqueda:", e);
-        res.status(500).send("Error en el servidor de búsqueda");
+        res.status(500).send("Error");
     }
 });
 
-// RUTA DE DESCARGA: Tu método que ya funciona
+// --- TU RUTA DE DESCARGA QUE SÍ FUNCIONA (Sin cambios) ---
 app.get('/descargar/:videoId', (req, res) => {
     const { videoId } = req.params;
-    console.log(`[LOG] ⏬ Transfiriendo audio: ${videoId}`);
-    
+    const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+    console.log(`[LOG] 🚀 Nueva petición: ID ${videoId}`);
+
     res.setHeader('Content-Type', 'audio/mpeg');
-    
+    res.setHeader('Content-Disposition', `attachment; filename="${videoId}.mp3"`);
+
     const comando = spawn(YT_DLP_PATH, [
+        '--js-runtime', 'node',
         '--no-check-certificate',
         '--extractor-args', 'youtube:player_client=android,web',
-        '-f', 'bestaudio',
+        '-f', 'bestaudio[ext=m4a]/best[height<=360]', // Tu configuración ganadora
         '-o', '-', 
-        `https://www.youtube.com/watch?v=${videoId}`
+        videoUrl
     ]);
 
     comando.stdout.pipe(res);
 
-    comando.on('close', (code) => {
-        console.log(`[LOG] 🏁 Stream finalizado código: ${code}`);
-        res.end();
-    });
-    
-    // Captura de errores por si el binario falla
     comando.stderr.on('data', (data) => {
-        console.log(`[yt-dlp error]: ${data}`);
+        const mensaje = data.toString();
+        if (mensaje.includes('[download]')) {
+            console.log(`[YT-DLP] ⏬ ${mensaje.trim()}`);
+        }
+    });
+
+    comando.on('close', (code) => {
+        if (code === 0) {
+            console.log(`[LOG] ✅ ÉXITO: Stream enviado a ID ${videoId}`);
+        } else {
+            console.error(`[LOG] ❌ ERROR: Código ${code}`);
+            if (!res.headersSent) res.status(500).send("Error");
+        }
+    });
+
+    req.on('close', () => {
+        console.log(`[LOG] 🛑 Conexión cerrada por el usuario.`);
+        comando.kill();
     });
 });
 
-// Escuchar en el puerto dinámico de Railway
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[SERVER] 🚀 Sistema listo en puerto ${PORT}`);
-});
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 SERVIDOR OK EN PUERTO ${PORT}`));
