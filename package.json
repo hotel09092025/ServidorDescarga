@@ -9,7 +9,7 @@
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "yt-search": "^2.13.1"
+    "yt-search": "^2.12.1"
 
   }
 }
